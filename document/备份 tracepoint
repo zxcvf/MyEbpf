@@ -1,0 +1,190 @@
+1. 什么是 tracepoint
+tracepoint 的介绍可以参见 Kernel 文档[1]。从 Linux 内核 4.7 开始，eBPF 程序可以挂载到内核跟踪点 tracepoint。在此之前，要完成内核中函数跟踪的工作，只能用 kprobes/kretprobe 等方式挂载到导出的内核函数（参见 /proc/kallsyms），正如我们前几篇文章跟踪 open 系统调用方式那样。尽管 kprobes 可以达到跟踪的目的，但存在很多不足：
+
+内核的内部 API 不稳定，如果内核版本变化导致声明修改，我们的跟踪程序就不能正常工作；
+出于性能考虑，大部分网络相关的内层函数都是内联或者静态的，两者都不能使用 kprobes 方式探测；
+找出调用某个函数的所有地方是相当乏味的，有时所需的字段数据不全具备；
+tracepoint 是由内核开发人员在代码中设置的静态 hook 点，具有稳定的 API 接口，不会随着内核版本的变化而变化，可以提高我们内核跟踪程序的可移植性。但是由于 tracepoint 是需要内核研发人员参数编写，因此在内核代码中的数量有限，并不是所有的内核函数中都具有类似的跟踪点，所以从灵活性上不如 kprobes 这种方式。在 3.10 内核中，kprobe 与 tracepoint 方式对比如下：
+
+项目	kprobes	tracepoint
+跟踪类型	动态	静态
+可跟踪数量	100000+	1200+ （perf list|wc -l)
+是否需要内核开发者维护	不需要	需要
+禁止的开销	无	少许 （NOPs 和元数据）
+稳定的 API	否	是
+“
+参考：《BPF Performace Tools》 2.9 Tracepoints，数据有更新。
+
+”
+在我们的内核跟踪程序中，如果存在 tracepoint 方式，我们应该优先使用，这使得跟踪程序具有良好的可移植性。
+
+2. 使用 tracepoint 实现
+open 系统调用具有两个 syscalls 类型的静态跟踪点，分别是 syscalls:sys_enter_open 和 syscalls:sys_exit_open，前者是进入函数，后者是从函数返回，功能基本等同于 kprobe/kretprobe。其中 syscalls 表示子系统模块， sys_enter_open 表示跟踪点名称。
+
+tracepoint 的完整列表可以使用 perf 工具的 perf list 命令查看，当然如果知道 tracepoint 的子系统，也可以进行过滤，比如 perf list 'syscalls:*' 命令只用于显示 syscalls 相关的 tracepoints 。
+
+# perf list|grep open
+  syscalls:sys_enter_open                            [Tracepoint event]
+  syscalls:sys_exit_open                             [Tracepoint event]
+为了在 eBPF 程序中使用，我们还需要知道 tracepoint 相关参数的格式，syscalls:sys_enter_open 格式定义在 /sys/kernel/debug/tracing/events/syscalls/sys_enter_open/format 文件中。
+
+$cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_open/format
+name: sys_enter_open
+ID: 497
+format:
+ field:unsigned short common_type; offset:0; size:2; signed:0;
+ field:unsigned char common_flags; offset:2; size:1; signed:0;
+ field:unsigned char common_preempt_count; offset:3; size:1; signed:0;
+ field:int common_pid; offset:4; size:4; signed:1;
+
+ field:int nr; offset:8; size:4; signed:1;
+ field:const char * filename; offset:16; size:8; signed:0;
+ field:int flags; offset:24; size:8; signed:0;
+ field:umode_t mode; offset:32; size:8; signed:0;
+
+print fmt: "filename: 0x%08lx, flags: 0x%08lx, mode: 0x%08lx", ((unsigned long)(REC->filename)), ((unsigned long)(REC->flags)), ((unsigned long)(REC->mode))
+2.1 TRACEPOINT_PROBE 宏
+对于 tracepoint 的跟踪，在 BCC 中可以使用 TRACEPOINT_PROBE 宏进行定义。宏的格式如下：
+
+TRACEPOINT_PROBE(category, event)
+其中 category 就是子系统，event 代表事件名。对于 syscalls:sys_enter_open 则为：
+
+TRACEPOINT_PROBE(syscalls,sys_enter_open)
+“
+注意子模块中的 syscalls 的名字最后包含 s。
+
+”
+tracepoint 中的所有参数都会包含在一个固定名称的 args 的结构体中。格式在上面我们已经进行了输出（/sys/kernel/debug/tracing/events/category/event/format）。args 结构体还可以作为内核函数中传递 ctx 参数的替代，比如使用 perf_submit的第一个参数。
+
+2.2 tracepoint 版本
+基础知识已经完成了铺垫，这里我们就将 perf_event 版本的代码[2] 进行少许调整，我们主要是将 BPF 程序中的 trace_syscall_open 函数进行替换即可。替换后的代码如下：
+
+TRACEPOINT_PROBE(syscalls,sys_enter_open){
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    struct event_data_t evt = {};
+
+    evt.pid = pid;
+    bpf_probe_read(&evt.fname, sizeof(evt.fname), (void *)args->filename);
+
+    open_events.perf_submit((struct pt_regs *)args, &evt, sizeof(evt));
+    return 0;
+}
+需要注意的是，TRACEPOINT_PROBE 定义的过程中未出现 args 相关的定义，但是我们可以直接使用，这是因为 BCC 协助我们完成了这步工作。另外 args 可以充当函数 ctx 也进行了展示，open_events.perf_submit((struct pt_regs *)args, &evt, sizeof(evt));。
+
+此外，由于 TRACEPOINT_PROBE 完成了 BPF 程序中主动注册的过程，因此原来版本中的 b.attach_kprobe(event=b.get_syscall_fnname("open"), fn_name="trace_syscall_open") 也不再需要。调整后的完整代码如下，完整版本请参考[Github]](https://github.com/DavadDi/bpf_study/blob/master/ebpf_bcc_trace_open_ex/tp_open_perf_output.py "Github]")：
+
+#!/usr/bin/python
+from bcc import BPF
+
+prog = """
+#include <uapi/linux/limits.h> // for  NAME_MAX
+
+struct event_data_t {
+    u32 pid;
+    char fname[NAME_MAX];  // max of filename
+};
+
+BPF_PERF_OUTPUT(open_events);
+
+// 1. 原来的函数 trace_syscall_open 被 TRACEPOINT_PROBE 所替代
+TRACEPOINT_PROBE(syscalls,sys_enter_open){
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    struct event_data_t evt = {};
+
+    evt.pid = pid;
+    bpf_probe_read(&evt.fname, sizeof(evt.fname), (void *)args->filename);
+
+    open_events.perf_submit((struct pt_regs *)args, &evt, sizeof(evt));
+    return 0;
+}
+"""
+
+b = BPF(text=prog)
+
+# 2. 不需要在显示调用注册，该行被删除
+# b.attach_kprobe(event=b.get_syscall_fnname("open"), fn_name="trace_syscall_open")
+
+# process event
+def print_event(cpu, data, size):
+  event = b["open_events"].event(data)
+  print("Rcv Event %d, %s"%(event.pid, event.fname))
+
+# loop with callback to print_event
+b["open_events"].open_perf_buffer(print_event)
+while True:
+    try:
+        b.perf_buffer_poll()
+    except KeyboardInterrupt:
+        exit()
+2.3 args 参数揭秘
+对于 TRACEPOINT_PROBE 中出现的 args 我们还是抱有一种好奇的心理，这到底是怎么样的一个结构体定义呢？
+
+在 Python 代码中的 BPF 对象（b = BPF(text=prog)） 中包含了一定的调试的功能，我们可以通过调试功能来一览 args 的面目。BPF 对象的完整语法如下，参见BCC 文档[3]：
+
+BPF({text=BPF_program | src_file=filename} [, usdt_contexts=[USDT_object, ...]] [, cflags=[arg1, ...]] [, debug=int])
+创建 BPF 对象。它是定义 BPF 程序的主要对象，并与它的输出进行交互。
+必须提供 text 或 src_file 中的一个（不是两个）。
+cflags 指定要传递给编译器的额外参数，例如 -DMACRO_NAME=value 或 -I/include/path。参数以数组形式传递，每个元素都是一个附加参数。注意，字符串不会被分割成空白，所以每个参数必须是数组中的不同元素，例如：["-include", "header.h"]。
+debug 标志控制调试输出，可以通过或操作进行组合。
+DEBUG_LLVM_IR = 0x1 编译 LLVM IR
+DEBUG_BPF = 0x2加载 BPF 字节码和分支上的寄存器状态
+DEBUG_PREPROCESSOR = 0x4 预处理器结果
+DEBUG_SOURCE = 0x8 ASM 指令嵌入了源码
+DEBUG_BPF_REGISTER_STATE = 0x10 除 DEBUG_BPF 外，所有指令的寄存器状态
+DEBUG_BTF = 0x20 打印来自libbpf库的信息。
+这里我们为 debug 参数传入 DEBUG_PREPROCESSOR 则可以得到预处理后的完成 BPF 代码。
+
+主要调整如下：
+
+from bcc import DEBUG_PREPROCESSOR  # 变量定义在 bcc 模块中，引入对应的变量
+
+b = BPF(text=prog, debug=DEBUG_PREPROCESSOR) # 会打印出预处理的结果
+再次运行程序程序，则可以看到程序运行结果的首部打印出了预编译后的 BPF 程序，这里我们看到了这个神秘的 args 结构体变量的定义，类型为 struct tracepoint__syscalls__sys_enter_open，其中第一个字段为 u64 __do_not_use__;，该字段为 ctx 的保留位置，这也是 args 可以作为 ctx 替代参数的原因。完整预处理结果如下：
+
+#include <uapi/linux/limits.h> // for  NAME_MAX
+
+struct event_data_t {
+    u32 pid;
+    char fname[NAME_MAX];  // max of filename
+};
+
+BPF_PERF_OUTPUT(open_events);
+
+struct tracepoint__syscalls__sys_enter_open {
+ u64 __do_not_use__; // for ctx
+ int nr;
+ const char * filename;
+ s64 flags;
+ umode_t mode;
+};
+
+__attribute__((section(".bpf.fn.tracepoint__syscalls__sys_enter_open")))
+TRACEPOINT_PROBE(syscalls,sys_enter_open){
+
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    struct event_data_t evt = {};
+
+    evt.pid = pid;
+    bpf_probe_read(&evt.fname, sizeof(evt.fname), (void *)args->filename);
+
+    bpf_perf_event_output((struct pt_regs *)args, bpf_pseudo_fd(1, -1), CUR_CPU_IDENTIFIER, &evt, sizeof(evt));
+    return 0;
+}
+C 语言版本的 tracepoint 样例参见这里的 BCC 文档[4]，可以参考上述代码自己定义 args 对应的 struct 结构体。
+
+参考资料
+[1]
+Kernel 文档:
+https://www.kernel.org/doc/html/latest/trace/tracepoints.html
+
+[2]
+perf_event 版本的代码:
+https://www.ebpf.top/post/ebpf_trace_file_open_perf_output/
+
+[3]
+BCC 文档:
+https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md#1-bpf
+
+[4]
+这里的 BCC 文档:
+https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md#3-attach_tracepoint

@@ -1,0 +1,36 @@
+./commands
+机器运行命令行
+使用 BPF_MAP_TYPE_PERF_EVENT_ARRAY (bpf_perf_event_output)
+
+./kprobe
+系统每秒执行sys_execve次数 每秒cpu消耗
+使用 BPF_MAP_TYPE_ARRAY
+
+./kprobe_percpu
+系统各核每秒执行sys_execve次数 每秒各核cpu消耗
+使用 BPF_MAP_TYPE_PERCPU_ARRAY
+
+./ringbuffer
+系统调用文件 (commands的不同实现)
+使用 PF_MAP_TYPE_RINGBUF
+
+./uretprobe
+bash_readline 检测系统命令行的所有输入
+使用 BPF_MAP_TYPE_PERF_EVENT_ARRAY
+
+./tracepoint_in_c
+tracepoint/kmem/mm_page_alloc
+内存页释放次数
+BPF_MAP_TYPE_ARRAY
+
+./xdp
+
+eth0 网卡无法锁定内存 https://github.com/asavie/xdp/issues/16
+
+
+
+不推荐
+./tracepoint_in_go
+tracepoint/syscalls/sys_enter_openat
+ebpf.PerfEventArray
+

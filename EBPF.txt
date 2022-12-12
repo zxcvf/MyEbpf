@@ -1,0 +1,13 @@
+Kprobe/kretprobe
+ebpf kprobe动态追踪是利用了Kprobes内核调试技术
+主要用来 syscall()函数有无被调用、何时被调用、执行是否正确以及函数的入参和返回值是什么等等
+
+举例 sys_execve调用次数 通过sys_execve分析cpu占用
+
+
+Uprobe/uretprobe
+
+tracepoint
+
+xdg
+

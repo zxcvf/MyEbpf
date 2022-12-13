@@ -54,14 +54,44 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	K_netifRx *ebpf.ProgramSpec `ebpf:"k_netif_rx"`
+	IptK_doTable  *ebpf.ProgramSpec `ebpf:"ipt_k_do_table"`
+	IptK_doTbl6   *ebpf.ProgramSpec `ebpf:"ipt_k_do_tbl6"`
+	IptKrDoTable  *ebpf.ProgramSpec `ebpf:"ipt_kr_do_table"`
+	IptKrDoTbl6   *ebpf.ProgramSpec `ebpf:"ipt_kr_do_tbl6"`
+	K___brFwd     *ebpf.ProgramSpec `ebpf:"k___br_fwd"`
+	K___kfreeSkb  *ebpf.ProgramSpec `ebpf:"k___kfree_skb"`
+	K_brForward   *ebpf.ProgramSpec `ebpf:"k_br_forward"`
+	K_brFwdF      *ebpf.ProgramSpec `ebpf:"k_br_fwd_f"`
+	K_brHandleFf  *ebpf.ProgramSpec `ebpf:"k_br_handle_ff"`
+	K_brNfFwdFin  *ebpf.ProgramSpec `ebpf:"k_br_nf_fwd_fin"`
+	K_brNfFwdIp   *ebpf.ProgramSpec `ebpf:"k_br_nf_fwd_ip"`
+	K_brNfPostRo  *ebpf.ProgramSpec `ebpf:"k_br_nf_post_ro"`
+	K_brNfPrero   *ebpf.ProgramSpec `ebpf:"k_br_nf_prero"`
+	K_brNfQ_xmit  *ebpf.ProgramSpec `ebpf:"k_br_nf_q_xmit"`
+	K_brNifRcv    *ebpf.ProgramSpec `ebpf:"k_br_nif_rcv"`
+	K_brPassF_up  *ebpf.ProgramSpec `ebpf:"k_br_pass_f_up"`
+	K_brnfPreroF  *ebpf.ProgramSpec `ebpf:"k_brnf_prero_f"`
+	K_devQ_xmit   *ebpf.ProgramSpec `ebpf:"k_dev_q_xmit"`
+	K_ipFinishOut *ebpf.ProgramSpec `ebpf:"k_ip_finish_out"`
+	K_ipOutput    *ebpf.ProgramSpec `ebpf:"k_ip_output"`
+	K_ipRcv       *ebpf.ProgramSpec `ebpf:"k_ip_rcv"`
+	K_ipRcvFinish *ebpf.ProgramSpec `ebpf:"k_ip_rcv_finish"`
+	K_napiGroRcv  *ebpf.ProgramSpec `ebpf:"k_napi_gro_rcv"`
+	K_netifRx     *ebpf.ProgramSpec `ebpf:"k_netif_rx"`
+	K_nifRcvSkb   *ebpf.ProgramSpec `ebpf:"k_nif_rcv_skb"`
+	K_packetRcv   *ebpf.ProgramSpec `ebpf:"k_packet_rcv"`
+	K_tpacketRcv  *ebpf.ProgramSpec `ebpf:"k_tpacket_rcv"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	KprobeMap *ebpf.MapSpec `ebpf:"kprobe_map"`
+	EventBuf       *ebpf.MapSpec `ebpf:"event_buf"`
+	SkbtracerCfg   *ebpf.MapSpec `ebpf:"skbtracer_cfg"`
+	SkbtracerEvent *ebpf.MapSpec `ebpf:"skbtracer_event"`
+	SkbtracerIpt   *ebpf.MapSpec `ebpf:"skbtracer_ipt"`
+	SkbtracerStack *ebpf.MapSpec `ebpf:"skbtracer_stack"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -83,12 +113,20 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	KprobeMap *ebpf.Map `ebpf:"kprobe_map"`
+	EventBuf       *ebpf.Map `ebpf:"event_buf"`
+	SkbtracerCfg   *ebpf.Map `ebpf:"skbtracer_cfg"`
+	SkbtracerEvent *ebpf.Map `ebpf:"skbtracer_event"`
+	SkbtracerIpt   *ebpf.Map `ebpf:"skbtracer_ipt"`
+	SkbtracerStack *ebpf.Map `ebpf:"skbtracer_stack"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.KprobeMap,
+		m.EventBuf,
+		m.SkbtracerCfg,
+		m.SkbtracerEvent,
+		m.SkbtracerIpt,
+		m.SkbtracerStack,
 	)
 }
 
@@ -96,12 +134,64 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	K_netifRx *ebpf.Program `ebpf:"k_netif_rx"`
+	IptK_doTable  *ebpf.Program `ebpf:"ipt_k_do_table"`
+	IptK_doTbl6   *ebpf.Program `ebpf:"ipt_k_do_tbl6"`
+	IptKrDoTable  *ebpf.Program `ebpf:"ipt_kr_do_table"`
+	IptKrDoTbl6   *ebpf.Program `ebpf:"ipt_kr_do_tbl6"`
+	K___brFwd     *ebpf.Program `ebpf:"k___br_fwd"`
+	K___kfreeSkb  *ebpf.Program `ebpf:"k___kfree_skb"`
+	K_brForward   *ebpf.Program `ebpf:"k_br_forward"`
+	K_brFwdF      *ebpf.Program `ebpf:"k_br_fwd_f"`
+	K_brHandleFf  *ebpf.Program `ebpf:"k_br_handle_ff"`
+	K_brNfFwdFin  *ebpf.Program `ebpf:"k_br_nf_fwd_fin"`
+	K_brNfFwdIp   *ebpf.Program `ebpf:"k_br_nf_fwd_ip"`
+	K_brNfPostRo  *ebpf.Program `ebpf:"k_br_nf_post_ro"`
+	K_brNfPrero   *ebpf.Program `ebpf:"k_br_nf_prero"`
+	K_brNfQ_xmit  *ebpf.Program `ebpf:"k_br_nf_q_xmit"`
+	K_brNifRcv    *ebpf.Program `ebpf:"k_br_nif_rcv"`
+	K_brPassF_up  *ebpf.Program `ebpf:"k_br_pass_f_up"`
+	K_brnfPreroF  *ebpf.Program `ebpf:"k_brnf_prero_f"`
+	K_devQ_xmit   *ebpf.Program `ebpf:"k_dev_q_xmit"`
+	K_ipFinishOut *ebpf.Program `ebpf:"k_ip_finish_out"`
+	K_ipOutput    *ebpf.Program `ebpf:"k_ip_output"`
+	K_ipRcv       *ebpf.Program `ebpf:"k_ip_rcv"`
+	K_ipRcvFinish *ebpf.Program `ebpf:"k_ip_rcv_finish"`
+	K_napiGroRcv  *ebpf.Program `ebpf:"k_napi_gro_rcv"`
+	K_netifRx     *ebpf.Program `ebpf:"k_netif_rx"`
+	K_nifRcvSkb   *ebpf.Program `ebpf:"k_nif_rcv_skb"`
+	K_packetRcv   *ebpf.Program `ebpf:"k_packet_rcv"`
+	K_tpacketRcv  *ebpf.Program `ebpf:"k_tpacket_rcv"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.IptK_doTable,
+		p.IptK_doTbl6,
+		p.IptKrDoTable,
+		p.IptKrDoTbl6,
+		p.K___brFwd,
+		p.K___kfreeSkb,
+		p.K_brForward,
+		p.K_brFwdF,
+		p.K_brHandleFf,
+		p.K_brNfFwdFin,
+		p.K_brNfFwdIp,
+		p.K_brNfPostRo,
+		p.K_brNfPrero,
+		p.K_brNfQ_xmit,
+		p.K_brNifRcv,
+		p.K_brPassF_up,
+		p.K_brnfPreroF,
+		p.K_devQ_xmit,
+		p.K_ipFinishOut,
+		p.K_ipOutput,
+		p.K_ipRcv,
+		p.K_ipRcvFinish,
+		p.K_napiGroRcv,
 		p.K_netifRx,
+		p.K_nifRcvSkb,
+		p.K_packetRcv,
+		p.K_tpacketRcv,
 	)
 }
 

@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
+	"unsafe"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
@@ -37,6 +39,32 @@ func main() {
 		log.Fatalf("loading objects: %v", err)
 	}
 	defer objs.Close()
+
+	bc := BpfConfig{
+		// NetNS:     cfg.NetNS,
+		Pid: uint32(1816),
+		// IP:        cfg.ip,
+		// Port:      (cfg.Port >> 8) & (cfg.Port << 8),
+		// IcmpID:    (cfg.IcmpID >> 8) & (cfg.IcmpID << 8),
+		// DropStack: bool2uint8(cfg.DropStack),
+		// CallStack: bool2uint8(cfg.CallStack),
+		// Proto:     cfg.proto,
+	}
+
+	var h reflect.SliceHeader
+	h.Data = uintptr(unsafe.Pointer(&bc))
+	h.Len = sizeOfBpfConfig
+	h.Cap = sizeOfBpfConfig
+	val := *(*[]byte)(unsafe.Pointer(&h))
+
+	cfg := objs.bpfMaps.SkbtracerCfg
+	err := cfg.Put(uint32(0), val)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	fmt.Printf("cfg: %v\n", cfg)
+	// return
 
 	// 调用link.Kprobe进行attach
 	// kp, err := link.Kprobe(fn, objs.K_netifRx, nil)
@@ -85,6 +113,7 @@ func main() {
 		// log.Printf("%s:%s return value: %s", binPath, symbol, unix.ByteSliceToString(event.Line[:]))
 		// fmt.Println(record.CPU, string(record.RawSample), reflect.TypeOf(record.RawSample))
 		var ev perfEvent
+
 		_ = ev.unmarshal(record.RawSample)
 
 		// fmt.Printf("%-10s %-20s %-12s %-8s %-6s %-18s %-18s %-6s %-54s %s\n",

@@ -1,0 +1,11 @@
+--2022-12-21 15:46:51--  https://www.jetbrains.com/pycharm/download/download-thanks.html?platform=windows
+Resolving www.jetbrains.com (www.jetbrains.com)... 99.84.50.62, 99.84.50.33, 99.84.50.21, ...
+Connecting to www.jetbrains.com (www.jetbrains.com)|99.84.50.62|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 50481 (49K) [text/html]
+Saving to: ‘download-thanks.html?platform=windows’
+
+download-thanks.html?platform=windows                 0%[                                                                                                                  ]       0  --.-KB/s               download-thanks.html?platform=windows               100%[=================================================================================================================>]  49.30K   206KB/s               download-thanks.html?platform=windows               100%[=================================================================================================================>]  49.30K   206KB/s    in 0.2s    
+
+2022-12-21 15:46:52 (206 KB/s) - ‘download-thanks.html?platform=windows’ saved [50481/50481]
+

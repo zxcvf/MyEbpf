@@ -214,6 +214,7 @@ int k_br_nf_q_xmit(struct pt_regs *ctx) {
 SEC("kprobe/ip_rcv")
 int k_ip_rcv(struct pt_regs *ctx) {
     struct sk_buff *skb = (struct sk_buff *)PT_REGS_PARM1(ctx);
+	bpf_printk("skb: %s", skb);
     return do_trace(ctx, skb, "ip_rcv");
 }
 

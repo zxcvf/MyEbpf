@@ -292,6 +292,18 @@ func (e *perfEvent) output() string {
 	return s.String()
 }
 
+func (e *perfEvent) getSize() int {
+	return int(e.TotLen)
+}
+
+func (e *perfEvent) getL3Size() int {
+	return int(e.l3Info.TotLen)
+}
+
+func (e *perfEvent) getFuncName() string {
+	return nullTerminatedStringToString(e.FuncName[:])
+}
+
 func nullTerminatedStringToString(val []byte) string {
 	// Calculate null terminated string len
 	slen := len(val)

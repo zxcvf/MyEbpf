@@ -51,7 +51,7 @@ func proto2uint8(s string) (uint8, error) {
 		return 17, nil
 	case "icmp":
 		return 1, nil
-	case "any":
+	case "any", "":
 		return 0, nil
 	default:
 		return 0, fmt.Errorf("invalid proto (%s)", s)
